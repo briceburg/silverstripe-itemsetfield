@@ -8,7 +8,11 @@ class HasManyPickerField extends ItemSetField {
 		'Sortable'           => false,
 		'SortableField'      => 'Sort',
 		'ExtraFilter'        => false,
-		'ShowPickedInSearch' => true
+		'ShowPickedInSearch' => true,
+		'AllowCreation'      => true,
+		'CreationAutoRelate' => true,
+		'CreationFields'     => 'getCMSFields',
+		'CreationValidator'  => 'getCMSValidator'
 	);
 
 	public static $actions = array(
@@ -148,6 +152,18 @@ class HasManyPickerField extends ItemSetField {
 		}
 	}
 
+	function Actions() {
+		$actions = parent::Actions();
+		
+		if($this->getOption('AllowCreation') && $this->getOtherClass()) $actions->push(new ArrayData(array(
+			'Name' => 'Create', 
+			'Link' => Controller::join_links($this->Link(), 'CreateItem'), 
+			'ExtraClass' => 'create'
+		)));
+		
+		return $actions;
+	}
+	
 	public function SearchForm() {
 		$context = singleton($this->otherClass)->getDefaultSearchContext();
 		$fields  = $context->getSearchFields();
@@ -192,6 +208,53 @@ class HasManyPickerField extends ItemSetField {
 		))->renderWith('HasManyPickerField_Search');
 	}
 
+	public function CreateItem($submission) {
+		if($submission instanceof SS_HTTPRequest) $submission = $submission->getVars();
+		
+		$form = $this->CreateForm();
+		$form->loadDataFrom($submission);
+		
+		// TODO: test form submission
+			// TODO: test validation
+			// TODO: write object
+			// TODO: if autorelate, relate object to parent.
+		
+		return $this->customise(array(
+			'Form' => $form
+		))->renderWith('HasManyPickerField_CreateItem');
+	}
+	
+	
+	// TODO: test validation. ensure validate before write
+	// TODO: test auto-relation on many-many, has-one
+	// TODO: add success message - create another record or edit existing.
+	// TODO: allow editing of objects
+	public function CreateForm(){
+
+		$sng = singleton($this->otherClass);
+		
+		$fieldsMethod   = $this->getOption('CreationFields');
+		$validateMethod = $this->getOption('CreationValidator');
+		$fields         = $sng->$fieldsMethod();
+		$validator      = $sng->hasMethod($validateMethod) ? $sng->$validateMethod() : new RequiredFields();
+
+		if($this->getOption('CreationAutoRelate')) {
+			// remove relation field to improve admin clarity
+			$fields->removeByName($this->parent->class . 'ID');
+		}
+		
+		$form = new Form($this, 'CreateForm',
+			$fields,
+			new FieldSet(
+				new FormAction("CreateItem", _t('ModelAdmin.ADDBUTTON', "Add"))
+			),
+			$validator
+		);
+		$form->setFormMethod('get');
+
+		return $form;
+	}
+	
 	public function Add($data, $item) {
 		$accessor = $this->name;
 		$this->parent->$accessor()->add($item);
